@@ -55,7 +55,17 @@
   .subtitle {
     color: var(--text-dim);
     font-size: 0.92rem;
-    margin: 0 0 20px;
+    margin: 0 0 10px;
+  }
+  .today-badge {
+    display: inline-block;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--card-border);
+    padding: 4px 12px;
+    border-radius: 999px;
+    margin-bottom: 16px;
   }
   .controls {
     display: flex;
@@ -196,6 +206,25 @@
   }
   .note.risk { border-left-color: var(--bad); background: rgba(248,113,113,.08); }
   .full-width { grid-column: 1 / -1; }
+  .radar-frame {
+    width: 100%;
+    height: 420px;
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-top: 12px;
+  }
+  .radar-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .radar-link-row { margin-top: 8px; font-size: 0.82rem; color: var(--text-dim); }
+  .radar-link-row a { color: var(--accent); }
+  .live-now-grid { display: flex; flex-wrap: wrap; gap: 26px; }
+  .live-now-item .lbl { font-size: 0.72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); }
+  .live-now-item .v { font-size: 1.35rem; font-weight: 700; line-height: 1.3; }
+  .live-now-item .sub2 { font-size: 0.78rem; color: var(--text-dim); }
+  .outfit-layout { display: flex; gap: 24px; flex-wrap: wrap; }
+  .avatar-wrap { flex: 0 0 140px; width: 140px; }
+  .avatar-wrap svg { width: 100%; height: auto; display: block; }
+  .outfit-details { flex: 1 1 260px; min-width: 240px; }
   footer {
     max-width: 980px;
     margin: 30px auto 0;
@@ -233,6 +262,7 @@
 <header>
   <h1>⛵ Chicago Lakefront Sailing Weather</h1>
   <p class="subtitle">Wind, waves, water temp &amp; what to wear — for any date on Lake Michigan off Chicago.</p>
+  <div class="today-badge" id="todayBadge">—</div>
 
   <div class="field" style="margin-bottom: 14px;">
     <label style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; display:block;">Upcoming Races</label>
@@ -276,6 +306,13 @@
     <div class="card" id="weatherCard">
       <h2>🌤️ Weather <span class="mode-tag" id="modeTagWx"></span></h2>
       <div id="weatherBody">—</div>
+    </div>
+
+    <div class="card full-width" id="radarCard">
+      <h2>📡 Live Radar &amp; Wind <span class="mode-tag">Right Now</span></h2>
+      <div id="liveNowBody">—</div>
+      <div class="radar-frame"><iframe id="windyFrame" title="Windy radar and wind map" loading="lazy" allowfullscreen></iframe></div>
+      <div class="radar-link-row">Full interactive map: <a id="windyLink" href="#" target="_blank" rel="noopener">Open on Windy.com</a></div>
     </div>
 
     <div class="card full-width" id="outfitCard">
@@ -325,6 +362,15 @@ const today = chicagoTodayStr();
 dateInput.min = addDaysStr(today, -365 * 3);
 dateInput.max = addDaysStr(today, 16);
 
+function updateTodayBadge() {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Chicago' });
+  const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago', timeZoneName: 'short' });
+  $('todayBadge').textContent = `Today: ${dateStr} · ${timeStr}`;
+}
+updateTodayBadge();
+setInterval(updateTodayBadge, 60000);
+
 // --- RACES: edit this list to add/change races. date is YYYY-MM-DD, harbor must match an <option value> above.
 const RACES = [
   { name: 'Example: NHYC Wednesday Series', date: addDaysStr(today, 4), harbor: 'monroe', notes: 'Placeholder — tell Claude your real races to swap this in.' },
@@ -355,6 +401,7 @@ function renderRaceRow(selectedRaceKey) {
       dateInput.value = btn.dataset.date;
       harborSel.value = btn.dataset.harbor;
       renderRaceRow(btn.dataset.key);
+      updateRadar();
       refresh();
     });
   });
@@ -374,7 +421,7 @@ renderRaceRow(initialRaceKey);
 
 // Manual date/harbor changes clear the "active" race highlight.
 dateInput.addEventListener('change', () => renderRaceRow(null));
-harborSel.addEventListener('change', () => renderRaceRow(null));
+harborSel.addEventListener('change', () => { renderRaceRow(null); updateRadar(); });
 
 const COMPASS = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
 function toCompass(deg) {
@@ -431,6 +478,48 @@ function buildUrl(base, params) {
   const u = new URL(base);
   Object.entries(params).forEach(([k, v]) => u.searchParams.set(k, v));
   return u.toString();
+}
+
+function windyEmbedUrl(lat, lon) {
+  return `https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&detailLat=${lat}&detailLon=${lon}&width=650&height=450&zoom=11&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates&detail=true&metricWind=mph&metricTemp=%C2%B0F&radarRange=-1`;
+}
+function windyLinkUrl(lat, lon) {
+  return `https://www.windy.com/?${lat},${lon},11`;
+}
+
+async function loadLiveNow(lat, lon) {
+  const el = $('liveNowBody');
+  el.innerHTML = `<span class="spinner"></span>Loading live conditions…`;
+  try {
+    const url = buildUrl('https://api.open-meteo.com/v1/forecast', {
+      latitude: lat, longitude: lon,
+      current: 'temperature_2m,apparent_temperature,windspeed_10m,winddirection_10m,windgusts_10m,cloudcover',
+      temperature_unit: 'fahrenheit', windspeed_unit: 'mph', timezone: 'America/Chicago'
+    });
+    const data = await fetchJSON(url);
+    const c = data.current;
+    if (!c) throw new Error('No current data');
+    const asOf = new Date(c.time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
+    el.innerHTML = `
+      <div class="live-now-grid">
+        <div class="live-now-item"><div class="lbl">Wind</div><div class="v">${c.windspeed_10m.toFixed(0)} mph <span class="sub2">(${mphToKt(c.windspeed_10m).toFixed(0)} kt)</span></div><div class="sub2">${toCompass(c.winddirection_10m)}</div></div>
+        <div class="live-now-item"><div class="lbl">Gusts</div><div class="v">${c.windgusts_10m.toFixed(0)} mph</div></div>
+        <div class="live-now-item"><div class="lbl">Temp</div><div class="v">${c.temperature_2m.toFixed(0)}°F</div><div class="sub2">feels ${c.apparent_temperature.toFixed(0)}°F</div></div>
+        <div class="live-now-item"><div class="lbl">Sky</div><div class="v" style="font-size:1.05rem;">${skyDescription(c.cloudcover)}</div></div>
+      </div>
+      <div class="sub2" style="margin-top:6px;">As of ${asOf} Chicago time — independent of the date selected above.</div>
+    `;
+  } catch (err) {
+    el.innerHTML = `<div class="sub2">Live conditions unavailable right now.</div>`;
+  }
+}
+
+function updateRadar() {
+  const opt = harborSel.options[harborSel.selectedIndex];
+  const lat = opt.dataset.lat, lon = opt.dataset.lon;
+  $('windyFrame').src = windyEmbedUrl(lat, lon);
+  $('windyLink').href = windyLinkUrl(lat, lon);
+  loadLiveNow(lat, lon);
 }
 
 async function loadForecastMode(lat, lon, dateStr) {
@@ -666,13 +755,58 @@ function computeOutfit(data) {
   return { tier, items, notes };
 }
 
+const OUTFIT_AVATARS = {
+  'Hot & Sunny': { top: '#ff8a5c', bottom: '#2fb6c9', shoe: '#e8b48c', sunglasses: true, hat: 'cap', hatColor: '#ffd166', accessory: '☀️' },
+  'Warm': { top: '#4fb3ff', bottom: '#5c6f82', shoe: '#2b2f36', sunglasses: true },
+  'Cool': { top: '#345d8a', jacket: '#3d6ea5', bottom: '#33475b', hat: 'beanie', hatColor: '#2b3f57' },
+  'Cold': { top: '#2b3f57', jacket: '#22314f', bottom: '#151d2b', hat: 'beanie', hatColor: '#151d2b', gloves: true },
+  'Frigid — Foul-Weather Gear': { top: '#0b3d91', jacket: '#0b3d91', bottom: '#0b3d91', hat: 'hood', hatColor: '#0b3d91', gloves: true, gloveColor: '#111', shoe: '#111', accessory: '❄️' },
+  'Unknown': { top: '#5a6b7a', bottom: '#3d4a56', shoe: '#20242b' },
+};
+
+function avatarSVG(cfg) {
+  const { skin = '#e8b48c', top, bottom, jacket, hat, hatColor, sunglasses, gloves, gloveColor = '#20242b', shoe = '#20242b', accessory } = cfg;
+  const armColor = jacket || top;
+  const jx = !!jacket;
+  const armX = jx ? [20, 101] : [24, 99];
+  const armW = jx ? 19 : 17;
+  const handCx = jx ? [30, 110] : [32, 108];
+  const hc = hatColor || jacket || '#33475b';
+  let s = `<svg viewBox="0 0 140 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Outfit illustration">`;
+  s += `<rect x="48" y="126" width="18" height="60" rx="9" fill="${bottom}"/>`;
+  s += `<rect x="74" y="126" width="18" height="60" rx="9" fill="${bottom}"/>`;
+  s += `<rect x="43" y="180" width="27" height="15" rx="6" fill="${shoe}"/>`;
+  s += `<rect x="70" y="180" width="27" height="15" rx="6" fill="${shoe}"/>`;
+  s += `<rect x="${armX[0]}" y="58" width="${armW}" height="64" rx="${armW / 2}" fill="${armColor}"/>`;
+  s += `<rect x="${armX[1]}" y="58" width="${armW}" height="64" rx="${armW / 2}" fill="${armColor}"/>`;
+  s += `<circle cx="${handCx[0]}" cy="126" r="9" fill="${gloves ? gloveColor : skin}"/>`;
+  s += `<circle cx="${handCx[1]}" cy="126" r="9" fill="${gloves ? gloveColor : skin}"/>`;
+  s += `<rect x="${jx ? 36 : 42}" y="${jx ? 52 : 56}" width="${jx ? 68 : 56}" height="${jx ? 78 : 70}" rx="${jx ? 16 : 14}" fill="${jacket || top}"/>`;
+  if (jx) s += `<line x1="70" y1="58" x2="70" y2="128" stroke="rgba(0,0,0,.25)" stroke-width="2"/>`;
+  if (hat === 'hood') s += `<circle cx="70" cy="30" r="29" fill="${hc}"/>`;
+  s += `<rect x="63" y="46" width="14" height="14" fill="${skin}"/>`;
+  s += `<circle cx="70" cy="32" r="20" fill="${skin}"/>`;
+  if (hat === 'cap') s += `<ellipse cx="70" cy="19" rx="23" ry="10" fill="${hc}"/><rect x="46" y="17" width="22" height="7" rx="3.5" fill="${hc}"/>`;
+  if (hat === 'beanie') s += `<rect x="47" y="3" width="46" height="25" rx="15" fill="${hc}"/><rect x="47" y="22" width="46" height="6" rx="3" fill="rgba(0,0,0,.15)"/>`;
+  if (sunglasses) s += `<rect x="54" y="27" width="32" height="8" rx="4" fill="#1b2838" opacity="0.92"/>`;
+  if (accessory) s += `<text x="118" y="20" font-size="22" text-anchor="middle">${accessory}</text>`;
+  s += `</svg>`;
+  return s;
+}
+
 function renderOutfitCard(data) {
   const outfit = computeOutfit(data);
   const body = $('outfitBody');
+  const cfg = OUTFIT_AVATARS[outfit.tier] || OUTFIT_AVATARS['Unknown'];
   body.innerHTML = `
-    <span class="tier-badge">${outfit.tier}</span>
-    <ul class="outfit">${outfit.items.map(i => `<li>${i}</li>`).join('')}</ul>
-    <div class="notes">${outfit.notes.map(n => `<div class="note${n.risk ? ' risk' : ''}">${n.text}</div>`).join('')}</div>
+    <div class="outfit-layout">
+      <div class="avatar-wrap">${avatarSVG(cfg)}</div>
+      <div class="outfit-details">
+        <span class="tier-badge">${outfit.tier}</span>
+        <ul class="outfit">${outfit.items.map(i => `<li>${i}</li>`).join('')}</ul>
+        <div class="notes">${outfit.notes.map(n => `<div class="note${n.risk ? ' risk' : ''}">${n.text}</div>`).join('')}</div>
+      </div>
+    </div>
   `;
 }
 
@@ -712,6 +846,7 @@ $('refreshBtn').addEventListener('click', refresh);
 harborSel.addEventListener('change', refresh);
 dateInput.addEventListener('change', refresh);
 
+updateRadar();
 refresh();
 </script>
 </body>
