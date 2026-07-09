@@ -171,13 +171,12 @@
   .feels { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 12px; }
   .tier-badge {
     display: inline-block;
-    background: var(--accent);
-    color: #062338;
     font-weight: 700;
-    padding: 4px 12px;
+    padding: 5px 14px;
     border-radius: 999px;
     font-size: 0.85rem;
     margin-bottom: 12px;
+    letter-spacing: .01em;
   }
   ul.outfit { list-style: none; padding: 0; margin: 0 0 10px; }
   ul.outfit li {
@@ -222,8 +221,9 @@
   .live-now-item .v { font-size: 1.35rem; font-weight: 700; line-height: 1.3; }
   .live-now-item .sub2 { font-size: 0.78rem; color: var(--text-dim); }
   .outfit-layout { display: flex; gap: 24px; flex-wrap: wrap; }
-  .avatar-wrap { flex: 0 0 140px; width: 140px; }
+  .avatar-wrap { flex: 0 0 170px; width: 170px; }
   .avatar-wrap svg { width: 100%; height: auto; display: block; }
+  .avatar-caption { font-size: 0.74rem; color: var(--text-dim); text-align: center; margin-top: 6px; line-height: 1.4; }
   .outfit-details { flex: 1 1 260px; min-width: 240px; }
   footer {
     max-width: 980px;
@@ -755,41 +755,147 @@ function computeOutfit(data) {
   return { tier, items, notes };
 }
 
+// Tier badge colors: chosen for strong contrast against white text (all >=4.5:1).
+const TIER_BADGE_COLORS = {
+  'Hot & Sunny': { bg: '#c2410c', fg: '#ffffff' },
+  'Warm': { bg: '#0e7490', fg: '#ffffff' },
+  'Cool': { bg: '#1d4ed8', fg: '#ffffff' },
+  'Cold': { bg: '#312e81', fg: '#ffffff' },
+  'Frigid — Foul-Weather Gear': { bg: '#7f1d1d', fg: '#ffffff' },
+  'Unknown': { bg: '#374151', fg: '#ffffff' },
+};
+
+// Helly Hansen-inspired technical foul-weather gear, piece by piece: base layer, jacket
+// (collar/zip/cuffs/chest pocket/accent stripe), bib pants with shoulder straps, boots, gloves.
 const OUTFIT_AVATARS = {
-  'Hot & Sunny': { top: '#ff8a5c', bottom: '#2fb6c9', shoe: '#e8b48c', sunglasses: true, hat: 'cap', hatColor: '#ffd166', accessory: '☀️' },
-  'Warm': { top: '#4fb3ff', bottom: '#5c6f82', shoe: '#2b2f36', sunglasses: true },
-  'Cool': { top: '#345d8a', jacket: '#3d6ea5', bottom: '#33475b', hat: 'beanie', hatColor: '#2b3f57' },
-  'Cold': { top: '#2b3f57', jacket: '#22314f', bottom: '#151d2b', hat: 'beanie', hatColor: '#151d2b', gloves: true },
-  'Frigid — Foul-Weather Gear': { top: '#0b3d91', jacket: '#0b3d91', bottom: '#0b3d91', hat: 'hood', hatColor: '#0b3d91', gloves: true, gloveColor: '#111', shoe: '#111', accessory: '❄️' },
-  'Unknown': { top: '#5a6b7a', bottom: '#3d4a56', shoe: '#20242b' },
+  'Hot & Sunny': {
+    base: '#ffb199', top: '#ff6a3d', bottom: '#0e7490', boots: false, shoe: '#f4f1ea',
+    sunglasses: true, hat: 'cap', hatColor: '#ffd166', accessory: '☀️',
+    pieces: 'Rash guard · Quick-dry shorts · Sailing cap · Polarized sunglasses',
+  },
+  'Warm': {
+    base: '#dbe9f5', top: '#0e7490', bottom: '#3f5265', boots: false, shoe: '#20242b',
+    sleeve: 'short', sunglasses: true,
+    pieces: 'Technical tee · Spray-top ready · Quick-dry pants · Deck shoes',
+  },
+  'Cool': {
+    base: '#dbe9f5', top: '#1d4ed8', jacket: '#1e40af', accent: '#facc15', bottom: '#26344a', boots: true, bootColor: '#20242b',
+    hat: 'beanie', hatColor: '#1e293b',
+    pieces: 'Helly Hansen-style zip jacket · Base layer · Beanie · Sailing boots',
+  },
+  'Cold': {
+    base: '#c7d2e0', top: '#1e2b47', jacket: '#312e81', accent: '#facc15', bottom: '#1c2333', bibs: true, bibColor: '#1e2333',
+    boots: true, bootColor: '#111827', hat: 'beanie', hatColor: '#1c2333', gloves: true, gloveColor: '#20242b',
+    pieces: 'Insulated foul-weather jacket · Bib pants · Beanie · Insulated gloves · Boots',
+  },
+  'Frigid — Foul-Weather Gear': {
+    base: '#c7d2e0', top: '#7f1d1d', jacket: '#7f1d1d', accent: '#facc15', bottom: '#111827', bibs: true, bibColor: '#111827',
+    boots: true, bootColor: '#0a0e16', hat: 'hood', hatColor: '#7f1d1d', gloves: true, gloveColor: '#111827', accessory: '❄️',
+    pieces: 'Full foul-weather jacket + hood · Bib pants · Insulated gloves · Boots · PFD',
+  },
+  'Unknown': { base: '#c7d2e0', top: '#4b5563', bottom: '#374151', boots: false, shoe: '#20242b', pieces: '' },
 };
 
 function avatarSVG(cfg) {
-  const { skin = '#e8b48c', top, bottom, jacket, hat, hatColor, sunglasses, gloves, gloveColor = '#20242b', shoe = '#20242b', accessory } = cfg;
-  const armColor = jacket || top;
+  const {
+    base = '#dbe9f5', top, jacket, accent, bottom, bibs, bibColor, boots, bootColor = '#20242b', shoe = '#20242b',
+    sleeve = 'long', hat, hatColor, sunglasses, gloves, gloveColor = '#20242b',
+  } = cfg;
+  const skin = '#e2a880';
   const jx = !!jacket;
-  const armX = jx ? [20, 101] : [24, 99];
-  const armW = jx ? 19 : 17;
-  const handCx = jx ? [30, 110] : [32, 108];
-  const hc = hatColor || jacket || '#33475b';
-  let s = `<svg viewBox="0 0 140 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Outfit illustration">`;
-  s += `<rect x="48" y="126" width="18" height="60" rx="9" fill="${bottom}"/>`;
-  s += `<rect x="74" y="126" width="18" height="60" rx="9" fill="${bottom}"/>`;
-  s += `<rect x="43" y="180" width="27" height="15" rx="6" fill="${shoe}"/>`;
-  s += `<rect x="70" y="180" width="27" height="15" rx="6" fill="${shoe}"/>`;
-  s += `<rect x="${armX[0]}" y="58" width="${armW}" height="64" rx="${armW / 2}" fill="${armColor}"/>`;
-  s += `<rect x="${armX[1]}" y="58" width="${armW}" height="64" rx="${armW / 2}" fill="${armColor}"/>`;
-  s += `<circle cx="${handCx[0]}" cy="126" r="9" fill="${gloves ? gloveColor : skin}"/>`;
-  s += `<circle cx="${handCx[1]}" cy="126" r="9" fill="${gloves ? gloveColor : skin}"/>`;
-  s += `<rect x="${jx ? 36 : 42}" y="${jx ? 52 : 56}" width="${jx ? 68 : 56}" height="${jx ? 78 : 70}" rx="${jx ? 16 : 14}" fill="${jacket || top}"/>`;
-  if (jx) s += `<line x1="70" y1="58" x2="70" y2="128" stroke="rgba(0,0,0,.25)" stroke-width="2"/>`;
-  if (hat === 'hood') s += `<circle cx="70" cy="30" r="29" fill="${hc}"/>`;
-  s += `<rect x="63" y="46" width="14" height="14" fill="${skin}"/>`;
-  s += `<circle cx="70" cy="32" r="20" fill="${skin}"/>`;
-  if (hat === 'cap') s += `<ellipse cx="70" cy="19" rx="23" ry="10" fill="${hc}"/><rect x="46" y="17" width="22" height="7" rx="3.5" fill="${hc}"/>`;
-  if (hat === 'beanie') s += `<rect x="47" y="3" width="46" height="25" rx="15" fill="${hc}"/><rect x="47" y="22" width="46" height="6" rx="3" fill="rgba(0,0,0,.15)"/>`;
-  if (sunglasses) s += `<rect x="54" y="27" width="32" height="8" rx="4" fill="#1b2838" opacity="0.92"/>`;
-  if (accessory) s += `<text x="118" y="20" font-size="22" text-anchor="middle">${accessory}</text>`;
+  const outerColor = jacket || top;
+  const shortSleeve = sleeve === 'short' && !jx;
+  const armW = jx ? 21 : 18;
+  const armLen = shortSleeve ? 34 : 66;
+  const armX = jx ? [18, 121] : [22, 118];
+  const armY = 62;
+  const handCy = armY + armLen + 8;
+  const handCx = [armX[0] + armW / 2, armX[1] + armW / 2];
+  const footY = 216;
+
+  let s = `<svg viewBox="0 0 160 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Illustration of the recommended outfit">`;
+
+  // legs / bib pants
+  const legColor = bibs ? bibColor : bottom;
+  s += `<rect x="56" y="132" width="20" height="66" rx="9" fill="${legColor}"/>`;
+  s += `<rect x="84" y="132" width="20" height="66" rx="9" fill="${legColor}"/>`;
+
+  // feet: boots or shoes
+  if (boots) {
+    s += `<rect x="51" y="196" width="28" height="30" rx="7" fill="${bootColor}"/><rect x="49" y="220" width="32" height="9" rx="4" fill="#0a0e16"/>`;
+    s += `<rect x="81" y="196" width="28" height="30" rx="7" fill="${bootColor}"/><rect x="79" y="220" width="32" height="9" rx="4" fill="#0a0e16"/>`;
+  } else {
+    s += `<rect x="52" y="${footY - 12}" width="27" height="15" rx="6" fill="${shoe}"/><rect x="52" y="${footY}" width="27" height="4" rx="2" fill="rgba(0,0,0,.3)"/>`;
+    s += `<rect x="81" y="${footY - 12}" width="27" height="15" rx="6" fill="${shoe}"/><rect x="81" y="${footY}" width="27" height="4" rx="2" fill="rgba(0,0,0,.3)"/>`;
+  }
+
+  // arms (sleeves)
+  s += `<rect x="${armX[0]}" y="${armY}" width="${armW}" height="${armLen}" rx="${armW / 2}" fill="${outerColor}"/>`;
+  s += `<rect x="${armX[1]}" y="${armY}" width="${armW}" height="${armLen}" rx="${armW / 2}" fill="${outerColor}"/>`;
+  if (jx) {
+    // cuffs
+    s += `<rect x="${armX[0]}" y="${armY + armLen - 9}" width="${armW}" height="9" rx="3" fill="rgba(0,0,0,.28)"/>`;
+    s += `<rect x="${armX[1]}" y="${armY + armLen - 9}" width="${armW}" height="9" rx="3" fill="rgba(0,0,0,.28)"/>`;
+  }
+  // hands / gloves
+  s += `<circle cx="${handCx[0]}" cy="${handCy}" r="10" fill="${gloves ? gloveColor : skin}"/>`;
+  s += `<circle cx="${handCx[1]}" cy="${handCy}" r="10" fill="${gloves ? gloveColor : skin}"/>`;
+  if (gloves) {
+    s += `<rect x="${handCx[0] - 9}" y="${handCy - 16}" width="18" height="10" rx="4" fill="${gloveColor}"/>`;
+    s += `<rect x="${handCx[1] - 9}" y="${handCy - 16}" width="18" height="10" rx="4" fill="${gloveColor}"/>`;
+  }
+
+  // torso base layer (visible short-sleeve or peeking collar)
+  s += `<rect x="48" y="60" width="64" height="76" rx="16" fill="${base}"/>`;
+  if (shortSleeve) {
+    s += `<rect x="30" y="60" width="20" height="30" rx="10" fill="${base}"/>`;
+    s += `<rect x="110" y="60" width="20" height="30" rx="10" fill="${base}"/>`;
+  }
+  // top / jacket body
+  s += `<rect x="${jx ? 40 : 46}" y="${jx ? 56 : 60}" width="${jx ? 80 : 68}" height="${jx ? 90 : 74}" rx="${jx ? 18 : 15}" fill="${outerColor}"/>`;
+  // stand-up collar
+  s += `<path d="M64,${jx ? 56 : 60} Q80,${jx ? 44 : 48} 96,${jx ? 56 : 60} L91,${jx ? 68 : 71} Q80,${jx ? 60 : 63} 69,${jx ? 68 : 71} Z" fill="${outerColor}" stroke="rgba(0,0,0,.25)" stroke-width="1.5"/>`;
+  // base-layer collar peeking through
+  s += `<path d="M72,${jx ? 58 : 62} Q80,${jx ? 64 : 68} 88,${jx ? 58 : 62} L86,${jx ? 66 : 70} Q80,${jx ? 70 : 74} 74,${jx ? 66 : 70} Z" fill="${base}"/>`;
+  // center zipper + storm flap
+  s += `<line x1="80" y1="${jx ? 66 : 70}" x2="80" y2="${jx ? 142 : 130}" stroke="rgba(0,0,0,.3)" stroke-width="2"/>`;
+  s += `<circle cx="80" cy="${jx ? 100 : 95}" r="2.5" fill="rgba(0,0,0,.4)"/>`;
+  // chest pocket with flap
+  s += `<rect x="${jx ? 98 : 92}" y="${jx ? 92 : 88}" width="20" height="16" rx="3" fill="none" stroke="rgba(0,0,0,.3)" stroke-width="1.5"/>`;
+  s += `<rect x="${jx ? 97 : 91}" y="${jx ? 90 : 86}" width="22" height="5" rx="2.5" fill="rgba(0,0,0,.3)"/>`;
+  // accent / reflective diagonal stripe on left sleeve
+  if (jx && accent) {
+    s += `<g transform="rotate(35 26 90)"><rect x="10" y="86" width="34" height="9" fill="${accent}"/></g>`;
+  }
+  // bib straps over the jacket, front to shoulder
+  if (bibs) {
+    s += `<path d="M62,140 L57,64 L67,64 L70,140 Z" fill="${bibColor}" opacity="0.94"/>`;
+    s += `<path d="M98,140 L103,64 L93,64 L90,140 Z" fill="${bibColor}" opacity="0.94"/>`;
+    s += `<rect x="60" y="150" width="40" height="22" rx="5" fill="${bibColor}"/>`;
+  }
+  // hood (drawn before head so face sits inside the opening)
+  if (hat === 'hood') {
+    s += `<circle cx="80" cy="34" r="32" fill="${hatColor}"/>`;
+    s += `<circle cx="80" cy="34" r="24" fill="${base}" opacity="0.001"/>`;
+    s += `<circle cx="66" cy="24" r="3" fill="rgba(0,0,0,.35)"/><circle cx="94" cy="24" r="3" fill="rgba(0,0,0,.35)"/>`;
+  }
+  // neck + head
+  s += `<rect x="71" y="46" width="18" height="16" fill="${skin}"/>`;
+  s += `<circle cx="80" cy="32" r="22" fill="${skin}"/>`;
+  // hat variants drawn on top of the head
+  if (hat === 'cap') {
+    s += `<ellipse cx="80" cy="18" rx="25" ry="11" fill="${hatColor}"/><rect x="52" y="16" width="24" height="8" rx="4" fill="${hatColor}"/><circle cx="80" cy="9" r="2.5" fill="rgba(0,0,0,.3)"/>`;
+  }
+  if (hat === 'beanie') {
+    s += `<rect x="55" y="2" width="50" height="27" rx="16" fill="${hatColor}"/><rect x="55" y="22" width="50" height="9" rx="4.5" fill="rgba(0,0,0,.22)"/>`;
+  }
+  // sunglasses
+  if (sunglasses) {
+    s += `<rect x="62" y="27" width="36" height="9" rx="4.5" fill="#0f1720" opacity="0.94"/><rect x="65" y="28.5" width="10" height="3" rx="1.5" fill="rgba(255,255,255,.35)"/>`;
+  }
+  // accessory icon
+  if (cfg.accessory) s += `<text x="134" y="22" font-size="22" text-anchor="middle">${cfg.accessory}</text>`;
+
   s += `</svg>`;
   return s;
 }
@@ -798,11 +904,15 @@ function renderOutfitCard(data) {
   const outfit = computeOutfit(data);
   const body = $('outfitBody');
   const cfg = OUTFIT_AVATARS[outfit.tier] || OUTFIT_AVATARS['Unknown'];
+  const badgeColor = TIER_BADGE_COLORS[outfit.tier] || TIER_BADGE_COLORS['Unknown'];
   body.innerHTML = `
     <div class="outfit-layout">
-      <div class="avatar-wrap">${avatarSVG(cfg)}</div>
+      <div class="avatar-wrap">
+        ${avatarSVG(cfg)}
+        ${cfg.pieces ? `<div class="avatar-caption">${cfg.pieces}</div>` : ''}
+      </div>
       <div class="outfit-details">
-        <span class="tier-badge">${outfit.tier}</span>
+        <span class="tier-badge" style="background:${badgeColor.bg}; color:${badgeColor.fg};">${outfit.tier}</span>
         <ul class="outfit">${outfit.items.map(i => `<li>${i}</li>`).join('')}</ul>
         <div class="notes">${outfit.notes.map(n => `<div class="note${n.risk ? ' risk' : ''}">${n.text}</div>`).join('')}</div>
       </div>
