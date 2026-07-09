@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chicago Lakefront Sailing Weather</title>
+<style>
+  :root {
+    --bg: #0b1a2b;
+    --bg-alt: #0f2338;
+    --card: #12283f;
+    --card-border: #1e3a56;
+    --text: #eaf2fb;
+    --text-dim: #9fb6cc;
+    --accent: #4fb3ff;
+    --accent-2: #ffd166;
+    --good: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #eef4fa;
+      --bg-alt: #ffffff;
+      --card: #ffffff;
+      --card-border: #d7e3ee;
+      --text: #0f2338;
+      --text-dim: #4a6280;
+      --accent: #0b74c4;
+      --accent-2: #b8860b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: linear-gradient(180deg, var(--bg) 0%, var(--bg-alt) 400px);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 60px;
+  }
+  header {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 28px 20px 10px;
+  }
+  h1 {
+    font-size: 1.5rem;
+    margin: 0 0 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 0.92rem;
+    margin: 0 0 20px;
+  }
+  .controls {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: end;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    padding: 16px;
+    border-radius: var(--radius);
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
+  select, input[type=date] {
+    background: var(--bg-alt);
+    color: var(--text);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.95rem;
+  }
+  button#refreshBtn {
+    background: var(--accent);
+    color: #062338;
+    border: none;
+    font-weight: 600;
+    padding: 9px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+  button#refreshBtn:hover { filter: brightness(1.08); }
+  .race-row {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .race-card {
+    flex: 0 0 auto;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    color: var(--text);
+    min-width: 168px;
+  }
+  .race-card:hover { border-color: var(--accent); }
+  .race-card.active { border-color: var(--accent); background: rgba(79,179,255,.12); }
+  .race-card .rc-name { font-weight: 700; font-size: 0.92rem; margin-bottom: 3px; }
+  .race-card .rc-date { color: var(--text-dim); font-size: 0.8rem; }
+  .race-card .rc-harbor { color: var(--text-dim); font-size: 0.78rem; }
+  .race-empty { color: var(--text-dim); font-size: 0.88rem; padding: 8px 2px; }
+  main { max-width: 980px; margin: 0 auto; padding: 18px 20px; }
+  .status { color: var(--text-dim); font-size: 0.9rem; margin: 14px 2px; min-height: 20px; }
+  .banner {
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    font-size: 0.92rem;
+    line-height: 1.4;
+    border: 1px solid;
+  }
+  .banner.advisory { background: rgba(248,113,113,.12); border-color: var(--bad); color: var(--text); }
+  .banner.info { background: rgba(79,179,255,.1); border-color: var(--accent); color: var(--text); }
+  .banner.clear { background: rgba(74,222,128,.1); border-color: var(--good); color: var(--text); }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    padding: 18px;
+  }
+  .card h2 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--text-dim);
+    margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 7px 0;
+    border-bottom: 1px dashed var(--card-border);
+    font-size: 0.94rem;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .val { font-weight: 600; }
+  .stat-row .sub { color: var(--text-dim); font-size: 0.8rem; margin-left: 6px; }
+  .big-temp { font-size: 2.6rem; font-weight: 700; line-height: 1; margin: 4px 0 2px; }
+  .feels { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 12px; }
+  .tier-badge {
+    display: inline-block;
+    background: var(--accent);
+    color: #062338;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+  }
+  ul.outfit { list-style: none; padding: 0; margin: 0 0 10px; }
+  ul.outfit li {
+    padding: 6px 0 6px 26px;
+    position: relative;
+    font-size: 0.94rem;
+    border-bottom: 1px solid var(--card-border);
+  }
+  ul.outfit li:last-child { border-bottom: none; }
+  ul.outfit li::before {
+    content: "⛵";
+    position: absolute;
+    left: 0;
+    top: 6px;
+    font-size: 0.85rem;
+  }
+  .notes { margin-top: 10px; }
+  .note {
+    font-size: 0.86rem;
+    line-height: 1.45;
+    padding: 8px 10px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    background: rgba(255,255,255,0.04);
+    border-left: 3px solid var(--accent-2);
+  }
+  .note.risk { border-left-color: var(--bad); background: rgba(248,113,113,.08); }
+  .full-width { grid-column: 1 / -1; }
+  footer {
+    max-width: 980px;
+    margin: 30px auto 0;
+    padding: 0 20px;
+    color: var(--text-dim);
+    font-size: 0.78rem;
+    line-height: 1.6;
+  }
+  footer a { color: var(--accent); }
+  .mode-tag {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    background: rgba(255,255,255,0.08);
+    padding: 2px 8px;
+    border-radius: 999px;
+    color: var(--text-dim);
+    margin-left: 8px;
+  }
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--text-dim);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⛵ Chicago Lakefront Sailing Weather</h1>
+  <p class="subtitle">Wind, waves, water temp &amp; what to wear — for any date on Lake Michigan off Chicago.</p>
+
+  <div class="field" style="margin-bottom: 14px;">
+    <label style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; display:block;">Upcoming Races</label>
+    <div id="raceRow" class="race-row"></div>
+  </div>
+
+  <div class="controls">
+    <div class="field">
+      <label for="harbor">Harbor / location</label>
+      <select id="harbor">
+        <option value="monroe" data-lat="41.8859" data-lon="-87.6083">Monroe Harbor</option>
+        <option value="dusable" data-lat="41.8918" data-lon="-87.6051">DuSable Harbor</option>
+        <option value="belmont" data-lat="41.9394" data-lon="-87.6317">Belmont Harbor</option>
+        <option value="diversey" data-lat="41.9328" data-lon="-87.6317">Diversey Harbor</option>
+        <option value="montrose" data-lat="41.9636" data-lon="-87.6386">Montrose Harbor</option>
+        <option value="31st" data-lat="41.8384" data-lon="-87.6009">31st Street Harbor</option>
+        <option value="jackson" data-lat="41.7869" data-lon="-87.5760">Jackson Park Harbor</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="dateInput">Or pick any date</label>
+      <input type="date" id="dateInput">
+    </div>
+    <div class="field">
+      <button id="refreshBtn">Get conditions</button>
+    </div>
+  </div>
+
+  <div class="status" id="status"></div>
+</header>
+
+<main>
+  <div id="alertBanner"></div>
+
+  <div class="grid">
+    <div class="card" id="sailingCard">
+      <h2>🌬️ Sailing Conditions <span class="mode-tag" id="modeTagSail"></span></h2>
+      <div id="sailingBody">—</div>
+    </div>
+
+    <div class="card" id="weatherCard">
+      <h2>🌤️ Weather <span class="mode-tag" id="modeTagWx"></span></h2>
+      <div id="weatherBody">—</div>
+    </div>
+
+    <div class="card full-width" id="outfitCard">
+      <h2>👕 What to Wear</h2>
+      <div id="outfitBody">—</div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Data: <a href="https://www.weather.gov/lot/" target="_blank" rel="noopener">NWS Chicago (LOT)</a> marine alerts ·
+  <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> forecast, marine &amp; historical archive ·
+  Live buoy readings: <a href="https://www.ndbc.noaa.gov/station_page.php?station=45198" target="_blank" rel="noopener">NDBC 45198 (Chicago)</a>.
+  Forecast detail is best within ~16 days; older/far-future dates fall back to historical or seasonal-average data as noted. Always check the official
+  <a href="https://www.weather.gov/lot/" target="_blank" rel="noopener">NWS marine forecast</a> and active advisories before heading out — this is a planning aid, not a safety authority.
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const harborSel = $('harbor');
+const dateInput = $('dateInput');
+const statusEl = $('status');
+
+function chicagoTodayStr() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+function addDaysStr(dateStr, days) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+function toUTCms(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+function diffDays(dateStr, fromStr) {
+  return Math.round((toUTCms(dateStr) - toUTCms(fromStr)) / 86400000);
+}
+function fmtDateLong(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+const today = chicagoTodayStr();
+dateInput.min = addDaysStr(today, -365 * 3);
+dateInput.max = addDaysStr(today, 16);
+
+// --- RACES: edit this list to add/change races. date is YYYY-MM-DD, harbor must match an <option value> above.
+const RACES = [
+  { name: 'Example: NHYC Wednesday Series', date: addDaysStr(today, 4), harbor: 'monroe', notes: 'Placeholder — tell Claude your real races to swap this in.' },
+  { name: 'Example: Chicago NOOD Regatta', date: addDaysStr(today, 11), harbor: 'dusable', notes: 'Placeholder race for demo purposes.' },
+];
+
+function renderRaceRow(selectedRaceKey) {
+  const row = $('raceRow');
+  if (!RACES.length) {
+    row.innerHTML = `<div class="race-empty">No races added yet — tell Claude the race name, date, and harbor and it'll show up here for everyone.</div>`;
+    return;
+  }
+  const sorted = [...RACES].sort((a, b) => a.date.localeCompare(b.date));
+  row.innerHTML = sorted.map(r => {
+    const opt = Array.from(harborSel.options).find(o => o.value === r.harbor);
+    const harborName = opt ? opt.textContent : r.harbor;
+    const key = `${r.date}|${r.harbor}|${r.name}`;
+    const isPast = diffDays(r.date, today) < 0;
+    const active = key === selectedRaceKey;
+    return `<button type="button" class="race-card${active ? ' active' : ''}" data-key="${key}" data-date="${r.date}" data-harbor="${r.harbor}" style="${isPast ? 'opacity:.55;' : ''}">
+      <div class="rc-name">${r.name}</div>
+      <div class="rc-date">${fmtDateLong(r.date)}${isPast ? ' · past' : ''}</div>
+      <div class="rc-harbor">${harborName}</div>
+    </button>`;
+  }).join('');
+  row.querySelectorAll('.race-card').forEach(btn => {
+    btn.addEventListener('click', () => {
+      dateInput.value = btn.dataset.date;
+      harborSel.value = btn.dataset.harbor;
+      renderRaceRow(btn.dataset.key);
+      refresh();
+    });
+  });
+}
+
+// Default view: soonest upcoming race if there is one, otherwise today.
+const upcoming = [...RACES].filter(r => diffDays(r.date, today) >= 0).sort((a, b) => a.date.localeCompare(b.date))[0];
+let initialRaceKey = null;
+if (upcoming) {
+  dateInput.value = upcoming.date;
+  harborSel.value = upcoming.harbor;
+  initialRaceKey = `${upcoming.date}|${upcoming.harbor}|${upcoming.name}`;
+} else {
+  dateInput.value = today;
+}
+renderRaceRow(initialRaceKey);
+
+// Manual date/harbor changes clear the "active" race highlight.
+dateInput.addEventListener('change', () => renderRaceRow(null));
+harborSel.addEventListener('change', () => renderRaceRow(null));
+
+const COMPASS = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+function toCompass(deg) {
+  if (deg == null || isNaN(deg)) return "—";
+  return COMPASS[Math.round(deg / 22.5) % 16];
+}
+function mphToKt(mph) { return mph * 0.868976; }
+function mToFt(m) { return m * 3.28084; }
+function cToF(c) { return c * 9 / 5 + 32; }
+
+function skyDescription(cloudPct) {
+  if (cloudPct == null || isNaN(cloudPct)) return "Unknown sky";
+  if (cloudPct < 15) return "Clear ☀️";
+  if (cloudPct < 40) return "Mostly Clear 🌤️";
+  if (cloudPct < 65) return "Partly Cloudy ⛅";
+  if (cloudPct < 88) return "Mostly Cloudy 🌥️";
+  return "Overcast ☁️";
+}
+
+async function fetchJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
+  return res.json();
+}
+
+// Extract "sailing window" (10:00-18:00 local) stats from an Open-Meteo hourly block for a given date.
+function sailingWindowStats(hourly, dateStr, fields) {
+  if (!hourly || !hourly.time) return null;
+  const idxs = [];
+  hourly.time.forEach((t, i) => {
+    if (t.startsWith(dateStr)) {
+      const hour = parseInt(t.slice(11, 13), 10);
+      if (hour >= 10 && hour <= 18) idxs.push(i);
+    }
+  });
+  const useIdxs = idxs.length ? idxs : hourly.time.map((t, i) => t.startsWith(dateStr) ? i : -1).filter(i => i >= 0);
+  if (!useIdxs.length) return null;
+  const out = {};
+  for (const f of fields) {
+    const arr = hourly[f];
+    if (!arr) continue;
+    const vals = useIdxs.map(i => arr[i]).filter(v => v != null && !isNaN(v));
+    if (!vals.length) continue;
+    out[f] = {
+      avg: vals.reduce((a, b) => a + b, 0) / vals.length,
+      max: Math.max(...vals),
+      min: Math.min(...vals),
+    };
+  }
+  return out;
+}
+
+function buildUrl(base, params) {
+  const u = new URL(base);
+  Object.entries(params).forEach(([k, v]) => u.searchParams.set(k, v));
+  return u.toString();
+}
+
+async function loadForecastMode(lat, lon, dateStr) {
+  const wxUrl = buildUrl('https://api.open-meteo.com/v1/forecast', {
+    latitude: lat, longitude: lon,
+    hourly: 'temperature_2m,apparent_temperature,precipitation_probability,windspeed_10m,windgusts_10m,winddirection_10m,cloudcover',
+    daily: 'sunrise,sunset',
+    temperature_unit: 'fahrenheit', windspeed_unit: 'mph', timezone: 'America/Chicago',
+    start_date: dateStr, end_date: dateStr
+  });
+  const marineUrl = buildUrl('https://marine-api.open-meteo.com/v1/marine', {
+    latitude: lat, longitude: lon,
+    hourly: 'wave_height,wave_period,wave_direction,wind_wave_height,swell_wave_height,sea_surface_temperature',
+    timezone: 'America/Chicago', start_date: dateStr, end_date: dateStr
+  });
+  const [wx, marine] = await Promise.all([
+    fetchJSON(wxUrl).catch(() => null),
+    fetchJSON(marineUrl).catch(() => null),
+  ]);
+  const wxStats = wx ? sailingWindowStats(wx.hourly, dateStr, ['temperature_2m','apparent_temperature','precipitation_probability','windspeed_10m','windgusts_10m','winddirection_10m','cloudcover']) : null;
+  const marineStats = marine ? sailingWindowStats(marine.hourly, dateStr, ['wave_height','wave_period','wave_direction','sea_surface_temperature']) : null;
+  return {
+    mode: 'forecast',
+    sunrise: wx?.daily?.sunrise?.[0] || null,
+    sunset: wx?.daily?.sunset?.[0] || null,
+    wx: wxStats, marine: marineStats,
+  };
+}
+
+async function loadHistoricalMode(lat, lon, dateStr) {
+  const wxUrl = buildUrl('https://archive-api.open-meteo.com/v1/archive', {
+    latitude: lat, longitude: lon,
+    hourly: 'temperature_2m,apparent_temperature,precipitation,windspeed_10m,windgusts_10m,winddirection_10m,cloudcover',
+    daily: 'sunrise,sunset',
+    temperature_unit: 'fahrenheit', windspeed_unit: 'mph', timezone: 'America/Chicago',
+    start_date: dateStr, end_date: dateStr
+  });
+  const wx = await fetchJSON(wxUrl).catch(() => null);
+  const wxStats = wx ? sailingWindowStats(wx.hourly, dateStr, ['temperature_2m','apparent_temperature','precipitation','windspeed_10m','windgusts_10m','winddirection_10m','cloudcover']) : null;
+  return {
+    mode: 'historical',
+    sunrise: wx?.daily?.sunrise?.[0] || null,
+    sunset: wx?.daily?.sunset?.[0] || null,
+    wx: wxStats, marine: null,
+  };
+}
+
+async function loadClimatologyMode(lat, lon, dateStr) {
+  const [, mm, dd] = dateStr.split('-');
+  const thisYear = parseInt(dateStr.slice(0, 4), 10);
+  const years = [1, 2, 3, 4, 5].map(back => thisYear - back);
+  const fields = ['temperature_2m','apparent_temperature','precipitation','windspeed_10m','windgusts_10m','cloudcover'];
+  const results = await Promise.all(years.map(async (yr) => {
+    let dstr = `${yr}-${mm}-${dd}`;
+    if (mm === '02' && dd === '29') dstr = `${yr}-02-28`;
+    const wxUrl = buildUrl('https://archive-api.open-meteo.com/v1/archive', {
+      latitude: lat, longitude: lon,
+      hourly: fields.join(','),
+      temperature_unit: 'fahrenheit', windspeed_unit: 'mph', timezone: 'America/Chicago',
+      start_date: dstr, end_date: dstr
+    });
+    const wx = await fetchJSON(wxUrl).catch(() => null);
+    return wx ? sailingWindowStats(wx.hourly, dstr, fields) : null;
+  }));
+  const valid = results.filter(Boolean);
+  if (!valid.length) return { mode: 'climatology', wx: null, marine: null, sunrise: null, sunset: null, years };
+  const merged = {};
+  for (const f of fields) {
+    const avgs = valid.map(v => v[f]?.avg).filter(v => v != null);
+    const maxs = valid.map(v => v[f]?.max).filter(v => v != null);
+    const mins = valid.map(v => v[f]?.min).filter(v => v != null);
+    if (avgs.length) {
+      merged[f] = {
+        avg: avgs.reduce((a, b) => a + b, 0) / avgs.length,
+        max: maxs.length ? maxs.reduce((a, b) => a + b, 0) / maxs.length : null,
+        min: mins.length ? mins.reduce((a, b) => a + b, 0) / mins.length : null,
+      };
+    }
+  }
+  return { mode: 'climatology', wx: merged, marine: null, sunrise: null, sunset: null, years };
+}
+
+async function loadAlerts(dateStr) {
+  if (dateStr !== today) return null;
+  try {
+    const data = await fetchJSON('https://api.weather.gov/alerts/active?zone=LMZ740');
+    return data.features || [];
+  } catch { return null; }
+}
+
+function renderAlertBanner(alerts, dateStr) {
+  const el = $('alertBanner');
+  if (dateStr !== today) { el.innerHTML = ''; return; }
+  if (alerts === null) { el.innerHTML = ''; return; }
+  if (!alerts.length) {
+    el.innerHTML = `<div class="banner clear">✅ No active NWS marine advisories right now for the Chicago lakefront zone (LMZ740).</div>`;
+    return;
+  }
+  el.innerHTML = alerts.map(a => {
+    const p = a.properties;
+    return `<div class="banner advisory">⚠️ <strong>${p.event}</strong> — ${p.headline || ''}<br>${(p.description || '').slice(0, 280)}${(p.description||'').length > 280 ? '…' : ''}</div>`;
+  }).join('');
+}
+
+function fmtTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
+}
+
+function renderSailingCard(data, dateStr) {
+  const tag = $('modeTagSail');
+  tag.textContent = data.mode === 'forecast' ? 'Forecast' : data.mode === 'historical' ? 'Historical' : 'Seasonal Avg';
+  const body = $('sailingBody');
+  const m = data.marine;
+  const wx = data.wx;
+
+  let rows = '';
+  if (wx?.windspeed_10m) {
+    const avgKt = mphToKt(wx.windspeed_10m.avg).toFixed(0);
+    const gustMph = wx.windgusts_10m ? wx.windgusts_10m.max : null;
+    const gustKt = gustMph != null ? mphToKt(gustMph).toFixed(0) : null;
+    const dir = wx.winddirection_10m ? toCompass(wx.winddirection_10m.avg) : '—';
+    rows += `<div class="stat-row"><span>Wind (10a–6p)</span><span class="val">${wx.windspeed_10m.avg.toFixed(0)} mph <span class="sub">(${avgKt} kt)</span> ${dir}</span></div>`;
+    if (gustMph != null) {
+      rows += `<div class="stat-row"><span>Gusts up to</span><span class="val">${gustMph.toFixed(0)} mph <span class="sub">(${gustKt} kt)</span></span></div>`;
+    }
+  } else {
+    rows += `<div class="stat-row"><span>Wind</span><span class="val">Not available</span></div>`;
+  }
+
+  if (m?.wave_height) {
+    rows += `<div class="stat-row"><span>Wave height</span><span class="val">${mToFt(m.wave_height.avg).toFixed(1)} ft <span class="sub">avg, up to ${mToFt(m.wave_height.max).toFixed(1)} ft</span></span></div>`;
+  }
+  if (m?.wave_period) {
+    rows += `<div class="stat-row"><span>Wave period</span><span class="val">${m.wave_period.avg.toFixed(1)} s</span></div>`;
+  }
+  if (m?.sea_surface_temperature) {
+    rows += `<div class="stat-row"><span>Water temp</span><span class="val">${cToF(m.sea_surface_temperature.avg).toFixed(0)}°F</span></div>`;
+  } else if (data.mode !== 'forecast') {
+    rows += `<div class="stat-row"><span>Water temp</span><span class="val sub">Not available (only forecast dates have live lake-model data)</span></div>`;
+  }
+  if (data.sunrise) rows += `<div class="stat-row"><span>Sunrise</span><span class="val">${fmtTime(data.sunrise)}</span></div>`;
+  if (data.sunset) rows += `<div class="stat-row"><span>Sunset</span><span class="val">${fmtTime(data.sunset)}</span></div>`;
+
+  if (data.mode !== 'forecast') {
+    rows += `<div class="note" style="margin-top:10px;">Wave &amp; water-temp lake-model data only covers roughly today through the next 16 days. For live conditions on other dates, check the <a href="https://www.ndbc.noaa.gov/station_page.php?station=45198" target="_blank" rel="noopener">NDBC Chicago buoy 45198</a>.</div>`;
+  }
+
+  body.innerHTML = rows || 'No data available for this date.';
+}
+
+function renderWeatherCard(data) {
+  const tag = $('modeTagWx');
+  tag.textContent = data.mode === 'forecast' ? 'Forecast' : data.mode === 'historical' ? 'Historical' : `Seasonal Avg (${data.years ? data.years.length + 'yr' : ''})`;
+  const body = $('weatherBody');
+  const wx = data.wx;
+  if (!wx || !wx.temperature_2m) {
+    body.innerHTML = 'No data available for this date.';
+    return;
+  }
+  const temp = wx.temperature_2m.avg;
+  const feels = wx.apparent_temperature ? wx.apparent_temperature.avg : temp;
+  const cloud = wx.cloudcover ? wx.cloudcover.avg : null;
+  let precipLine = '';
+  if (wx.precipitation_probability) {
+    precipLine = `<div class="stat-row"><span>Chance of rain</span><span class="val">${wx.precipitation_probability.max.toFixed(0)}%</span></div>`;
+  } else if (wx.precipitation) {
+    precipLine = `<div class="stat-row"><span>Precipitation (typical)</span><span class="val">${wx.precipitation.avg.toFixed(2)} in</span></div>`;
+  }
+  body.innerHTML = `
+    <div class="big-temp">${temp.toFixed(0)}°F</div>
+    <div class="feels">Feels like ${feels.toFixed(0)}°F · ${skyDescription(cloud)}</div>
+    <div class="stat-row"><span>High / Low (10a–6p)</span><span class="val">${wx.temperature_2m.max.toFixed(0)}° / ${wx.temperature_2m.min.toFixed(0)}°F</span></div>
+    ${precipLine}
+    <div class="stat-row"><span>Cloud cover</span><span class="val">${cloud != null ? cloud.toFixed(0) + '%' : '—'}</span></div>
+  `;
+}
+
+function computeOutfit(data) {
+  const wx = data.wx;
+  const marine = data.marine;
+  if (!wx || !wx.temperature_2m) {
+    return { tier: 'Unknown', items: [], notes: [{ text: 'Not enough data to build a recommendation for this date.', risk: false }] };
+  }
+  const feels = wx.apparent_temperature ? wx.apparent_temperature.avg : wx.temperature_2m.avg;
+  const windMph = wx.windspeed_10m ? wx.windspeed_10m.avg : 0;
+  const gustMph = wx.windgusts_10m ? wx.windgusts_10m.max : windMph;
+  const waterTempF = marine?.sea_surface_temperature ? cToF(marine.sea_surface_temperature.avg) : null;
+  const rainy = (wx.precipitation_probability && wx.precipitation_probability.max >= 40) ||
+                (wx.precipitation && wx.precipitation.avg >= 0.05);
+
+  // Lake wind exposure knocks the "feels like" down further than the shore-based apparent temp.
+  const chillPenalty = windMph > 15 ? 7 : windMph > 8 ? 4 : 0;
+  const onWater = feels - chillPenalty;
+
+  let tier, items;
+  if (onWater >= 80) {
+    tier = 'Hot & Sunny';
+    items = ['Quick-dry swim trunks or board shorts', 'Breathable rash guard or light tech tee', 'Polarized sunglasses with a retainer strap', 'Reef-safe SPF 30+ sunscreen, reapplied often', 'Wide-brim hat or sailing cap', 'Quick-dry water shoes or sailing sandals'];
+  } else if (onWater >= 65) {
+    tier = 'Warm';
+    items = ['Quick-dry shorts or lightweight pants', 'Breathable long-sleeve sun shirt or tee', 'Light spray/wind jacket for gusts and splash', 'Sunglasses + sunscreen', 'Deck shoes with non-marking soles'];
+  } else if (onWater >= 55) {
+    tier = 'Cool';
+    items = ['Moisture-wicking base layer, top and bottom', 'Fleece or light insulating midlayer', 'Windproof, water-resistant jacket', 'Brimmed hat or beanie for wind', 'Deck shoes or boots', 'Light gloves if wind is up'];
+  } else if (onWater >= 45) {
+    tier = 'Cold';
+    items = ['Thermal base layer, top and bottom', 'Insulating midlayer (fleece or puffy)', 'Waterproof/windproof foul-weather jacket', 'Foul-weather bibs if seas are choppy or rain is likely', 'Warm hat and gloves', 'Wool or synthetic socks with waterproof boots'];
+  } else {
+    tier = 'Frigid — Foul-Weather Gear';
+    items = ['Full foul-weather jacket and bibs', 'Insulated layers underneath (base + heavy mid)', 'Waterproof, insulated gloves', 'Warm hat or balaclava covering ears', 'Insulated waterproof boots', 'PFD worn at all times — consider a drysuit if there is any immersion risk'];
+  }
+
+  const notes = [];
+  if (waterTempF != null && waterTempF < 60) {
+    notes.push({ text: `Water is about ${waterTempF.toFixed(0)}°F — cold enough for cold-shock and hypothermia risk if someone goes overboard. Dress for water temperature, not air temperature, and wear your PFD at all times.`, risk: true });
+  }
+  if (gustMph >= 25) {
+    notes.push({ text: `Gusts near ${gustMph.toFixed(0)} mph (${mphToKt(gustMph).toFixed(0)} kt) — small-craft-advisory territory. Reef early, brief your crew, secure loose gear, and consider a shorter or postponed sail.`, risk: true });
+  } else if (gustMph <= 6 && windMph <= 5) {
+    notes.push({ text: 'Light air expected — bring light-wind sails and be ready to motor. Less wind also means more sun exposure, so don\'t skimp on sun protection.', risk: false });
+  }
+  if (rainy) {
+    notes.push({ text: 'Rain is likely — pack a waterproof outer layer even if you picked a lighter tier above.', risk: false });
+  }
+  if (data.mode !== 'forecast') {
+    notes.push({ text: data.mode === 'climatology'
+      ? 'This date is beyond the 16-day forecast window, so these numbers are a seasonal average from the same date over the past several years, not a real forecast — actual conditions can vary a lot.'
+      : 'This is historical weather for a past date, useful for planning around typical conditions, not a live forecast.', risk: false });
+  }
+
+  return { tier, items, notes };
+}
+
+function renderOutfitCard(data) {
+  const outfit = computeOutfit(data);
+  const body = $('outfitBody');
+  body.innerHTML = `
+    <span class="tier-badge">${outfit.tier}</span>
+    <ul class="outfit">${outfit.items.map(i => `<li>${i}</li>`).join('')}</ul>
+    <div class="notes">${outfit.notes.map(n => `<div class="note${n.risk ? ' risk' : ''}">${n.text}</div>`).join('')}</div>
+  `;
+}
+
+async function refresh() {
+  const opt = harborSel.options[harborSel.selectedIndex];
+  const lat = opt.dataset.lat, lon = opt.dataset.lon;
+  const dateStr = dateInput.value;
+  if (!dateStr) return;
+
+  statusEl.innerHTML = `<span class="spinner"></span>Loading conditions for ${opt.textContent} — ${fmtDateLong(dateStr)}…`;
+  $('sailingBody').innerHTML = '—';
+  $('weatherBody').innerHTML = '—';
+  $('outfitBody').innerHTML = '—';
+  $('alertBanner').innerHTML = '';
+
+  const dd = diffDays(dateStr, today);
+  try {
+    let data, alerts;
+    if (dd >= -1 && dd <= 15) {
+      [data, alerts] = await Promise.all([loadForecastMode(lat, lon, dateStr), loadAlerts(dateStr)]);
+    } else if (dd < -1) {
+      [data, alerts] = await Promise.all([loadHistoricalMode(lat, lon, dateStr), loadAlerts(dateStr)]);
+    } else {
+      [data, alerts] = await Promise.all([loadClimatologyMode(lat, lon, dateStr), loadAlerts(dateStr)]);
+    }
+    renderAlertBanner(alerts, dateStr);
+    renderSailingCard(data, dateStr);
+    renderWeatherCard(data);
+    renderOutfitCard(data);
+    statusEl.textContent = `Showing ${opt.textContent} — ${fmtDateLong(dateStr)}`;
+  } catch (err) {
+    statusEl.textContent = `Something went wrong loading conditions: ${err.message}`;
+  }
+}
+
+$('refreshBtn').addEventListener('click', refresh);
+harborSel.addEventListener('change', refresh);
+dateInput.addEventListener('change', refresh);
+
+refresh();
+</script>
+</body>
+</html>
