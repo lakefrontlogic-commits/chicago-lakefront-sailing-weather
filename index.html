@@ -50,12 +50,14 @@
     background: linear-gradient(180deg, var(--bg) 0%, var(--bg-alt) 400px);
     color: var(--text);
     min-height: 100vh;
-    padding-bottom: 60px;
+    padding-bottom: calc(60px + env(safe-area-inset-bottom));
+    -webkit-text-size-adjust: 100%;
+    overflow-x: hidden;
   }
   header {
     max-width: 980px;
     margin: 0 auto;
-    padding: 28px 20px 10px;
+    padding: calc(28px + env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) 10px max(20px, env(safe-area-inset-left));
   }
   h1 {
     font-size: 1.5rem;
@@ -96,18 +98,20 @@
     color: var(--text);
     border: 1px solid var(--card-border);
     border-radius: 8px;
-    padding: 8px 10px;
-    font-size: 0.95rem;
+    padding: 11px 12px;
+    font-size: 16px;
+    min-height: 44px;
   }
   button#refreshBtn {
     background: var(--accent);
-    color: #062338;
+    color: var(--accent-fg);
     border: none;
     font-weight: 600;
-    padding: 9px 16px;
+    padding: 11px 18px;
     border-radius: 8px;
     cursor: pointer;
-    font-size: 0.95rem;
+    font-size: 16px;
+    min-height: 44px;
   }
   button#refreshBtn:hover { filter: brightness(1.08); }
   .race-row {
@@ -115,18 +119,22 @@
     gap: 10px;
     overflow-x: auto;
     padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
   }
   .race-card {
     flex: 0 0 auto;
     background: var(--card);
     border: 1px solid var(--card-border);
     border-radius: 12px;
-    padding: 10px 14px;
+    padding: 12px 14px;
     cursor: pointer;
     text-align: left;
     font-family: inherit;
     color: var(--text);
     min-width: 168px;
+    min-height: 44px;
+    scroll-snap-align: start;
   }
   .race-card:hover { border-color: var(--accent); }
   .race-card.active { border-color: var(--accent); background: rgba(79,179,255,.12); }
@@ -320,13 +328,22 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (max-width: 480px) {
-    .radar-frame { height: 280px; }
-    .avatar-wrap { width: 150px; flex: 0 0 150px; }
+    .radar-frame { height: 260px; }
+    .avatar-wrap { width: 150px; flex: 0 0 150px; margin: 0 auto; }
+    .outfit-layout { justify-content: center; text-align: left; }
     .big-temp { font-size: 2.2rem; }
-    header { padding: 20px 14px 8px; }
-    main { padding: 14px 14px; }
+    h1 { font-size: 1.3rem; }
+    .subtitle { font-size: 0.86rem; }
+    header {
+      padding: calc(20px + env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 8px max(14px, env(safe-area-inset-left));
+    }
+    main { padding: 14px max(14px, env(safe-area-inset-right)) 14px max(14px, env(safe-area-inset-left)); }
     .live-now-grid { gap: 8px; }
     .live-now-item { padding: 8px 12px; min-width: 92px; }
+    .controls { flex-direction: column; align-items: stretch; padding: 14px; gap: 10px; }
+    .controls .field { width: 100%; }
+    .controls select, .controls input[type=date], .controls button#refreshBtn { width: 100%; }
+    .card { padding: 14px; }
   }
 </style>
 </head>
