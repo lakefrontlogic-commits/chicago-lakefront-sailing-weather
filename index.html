@@ -242,16 +242,51 @@
   .sub2 { font-size: 0.8rem; color: var(--text-dim); font-weight: 600; }
   .outfit-layout { display: flex; gap: 24px; flex-wrap: wrap; }
   .avatar-wrap { flex: 0 0 190px; width: 190px; }
+  .avatar-frame {
+    position: relative;
+    border-radius: 16px;
+    padding: 3px;
+    animation: glow-pulse 3.2s ease-in-out infinite;
+  }
   .avatar-photo {
     width: 100%;
     aspect-ratio: 1 / 2;
     object-fit: contain;
     object-position: center bottom;
     display: block;
-    border-radius: 16px;
+    border-radius: 14px;
     background: linear-gradient(180deg, #dce9f2, #a9c2d6);
+    transition: filter 0.4s ease;
   }
-  .avatar-caption { font-size: 0.74rem; color: var(--text-dim); text-align: center; margin-top: 6px; line-height: 1.4; font-weight: 600; }
+  @keyframes glow-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 var(--tier-glow, rgba(79,179,255,.35)); }
+    50% { box-shadow: 0 0 22px 4px var(--tier-glow, rgba(79,179,255,.35)); }
+  }
+  .avatar-badges {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .avatar-badge {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: rgba(10,20,35,.72);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.35);
+    animation: badge-bob 2.4s ease-in-out infinite;
+  }
+  .avatar-badge:nth-child(2) { animation-delay: .3s; }
+  .avatar-badge:nth-child(3) { animation-delay: .6s; }
+  @keyframes badge-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+  .avatar-caption { font-size: 0.74rem; color: var(--text-dim); text-align: center; margin-top: 8px; line-height: 1.4; font-weight: 600; }
   .outfit-details { flex: 1 1 260px; min-width: 240px; }
   footer {
     max-width: 980px;
@@ -790,7 +825,7 @@ function computeOutfit(data) {
       : 'This is historical weather for a past date, useful for planning around typical conditions, not a live forecast.', risk: false });
   }
 
-  return { tier, items, notes, rainy };
+  return { tier, items, notes, rainy, gustMph, windMph, onWater, waterTempF };
 }
 
 // Tier badge colors: chosen for strong contrast against white text (all >=4.5:1).
@@ -828,16 +863,40 @@ function pickAvatarState(outfit) {
   return 'cold';
 }
 
+// Small reactive badges + a color wash on the photo, driven by the same live numbers as the
+// outfit list — since there are only 3 real photos, this is how the avatar keeps "moving" with
+// conditions that don't change which photo is shown (e.g. gusty-but-mild, or scorching sun).
+function avatarDynamics(outfit) {
+  const badges = [];
+  if (outfit.rainy) badges.push('🌧️');
+  if (outfit.gustMph >= 20) badges.push('💨');
+  if (outfit.onWater >= 82 && !outfit.rainy) badges.push('☀️');
+  if (outfit.onWater <= 34) badges.push('🥶');
+  else if (outfit.waterTempF != null && outfit.waterTempF < 55) badges.push('❄️');
+
+  let filter = 'none';
+  let glow = 'rgba(79,179,255,.35)';
+  if (outfit.onWater >= 82) { filter = 'saturate(1.15) brightness(1.06) sepia(0.06)'; glow = 'rgba(244,196,48,.45)'; }
+  else if (outfit.onWater <= 34) { filter = 'saturate(0.9) brightness(0.96) hue-rotate(-6deg)'; glow = 'rgba(125,170,255,.45)'; }
+  else if (outfit.rainy) { filter = 'saturate(0.92) contrast(1.05) brightness(0.97)'; glow = 'rgba(90,120,160,.45)'; }
+
+  return { badges: badges.slice(0, 3), filter, glow };
+}
+
 function renderOutfitCard(data) {
   const outfit = computeOutfit(data);
   const body = $('outfitBody');
   const badgeColor = TIER_BADGE_COLORS[outfit.tier] || TIER_BADGE_COLORS['Unknown'];
   const stateKey = pickAvatarState(outfit);
   const state = AVATAR_STATES[stateKey];
+  const dyn = avatarDynamics(outfit);
   body.innerHTML = `
     <div class="outfit-layout">
       <div class="avatar-wrap">
-        <img class="avatar-photo" src="${state.file}" alt="${state.alt}">
+        <div class="avatar-frame" style="--tier-glow:${dyn.glow};">
+          <img class="avatar-photo" src="${state.file}" alt="${state.alt}" style="filter:${dyn.filter};">
+          ${dyn.badges.length ? `<div class="avatar-badges">${dyn.badges.map(b => `<div class="avatar-badge">${b}</div>`).join('')}</div>` : ''}
+        </div>
         <div class="avatar-caption">${state.label}</div>
       </div>
       <div class="outfit-details">
