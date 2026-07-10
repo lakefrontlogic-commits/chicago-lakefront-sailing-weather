@@ -242,8 +242,16 @@
   .sub2 { font-size: 0.8rem; color: var(--text-dim); font-weight: 600; }
   .outfit-layout { display: flex; gap: 24px; flex-wrap: wrap; }
   .avatar-wrap { flex: 0 0 190px; width: 190px; }
-  .avatar-wrap svg { width: 100%; height: auto; display: block; }
-  .avatar-caption { font-size: 0.74rem; color: var(--text-dim); text-align: center; margin-top: 6px; line-height: 1.4; }
+  .avatar-photo {
+    width: 100%;
+    aspect-ratio: 1 / 2;
+    object-fit: contain;
+    object-position: center bottom;
+    display: block;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #dce9f2, #a9c2d6);
+  }
+  .avatar-caption { font-size: 0.74rem; color: var(--text-dim); text-align: center; margin-top: 6px; line-height: 1.4; font-weight: 600; }
   .outfit-details { flex: 1 1 260px; min-width: 240px; }
   footer {
     max-width: 980px;
@@ -782,7 +790,7 @@ function computeOutfit(data) {
       : 'This is historical weather for a past date, useful for planning around typical conditions, not a live forecast.', risk: false });
   }
 
-  return { tier, items, notes };
+  return { tier, items, notes, rainy };
 }
 
 // Tier badge colors: chosen for strong contrast against white text (all >=4.5:1).
@@ -795,198 +803,42 @@ const TIER_BADGE_COLORS = {
   'Unknown': { bg: '#374151', fg: '#ffffff' },
 };
 
-// Sporty technical-sailing palette (navy / white / yellow piping / charcoal panels), matching
-// a reference set of Chicago-lakefront foul-weather gear looks. Chunky, rounded mascot style.
-const OUTFIT_AVATARS = {
-  'Hot & Sunny': {
-    skin: '#e2a880', hair: '#3b2a1f', top: '#f0f4f7', bottom: '#1c2b45', patch: '#f4c430',
-    boots: false, shoe: '#1c2b45', sole: '#ffffff',
-    sunglasses: true, hat: 'cap', hatColor: '#1c2b45', accent: '#f4c430', accessory: '☀️', bgFrom: '#ffe3b0', bgTo: '#ff9d6c',
-    pieces: 'White tech tee · Navy shorts · Navy cap · Polarized sunglasses',
+// Real photo avatar (Henley Hensen pack) — three states, chosen by rain vs. temperature tier.
+const AVATAR_STATES = {
+  'sun-cool': {
+    file: 'assets/henley-hensen-sun-cool.jpg',
+    alt: 'Avatar in a navy and white jacket and cap for clear, mild-to-warm Chicago lake weather.',
+    label: 'Sun / mild gear',
   },
-  'Warm': {
-    skin: '#e2a880', hair: '#3b2a1f', top: '#f0f4f7', bottom: '#2b3038', patch: '#1c2b45',
-    boots: false, shoe: '#1c2b45', sole: '#ffffff', sleeve: 'short',
-    sunglasses: true, accent: '#f4c430', bgFrom: '#c9f0ea', bgTo: '#6fb8c9',
-    pieces: 'White tech tee · Charcoal quick-dry pants · Yellow trim · Sneakers',
+  'rain': {
+    file: 'assets/henley-hensen-rain.jpg',
+    alt: 'Avatar in a navy hooded rain shell for wet, spray-heavy Chicago sailing weather.',
+    label: 'Rain / spray gear',
   },
-  'Cool': {
-    skin: '#e2a880', hair: '#3b2a1f', top: '#1c2b45', jacket: '#1c2b45', panel: '#f0f4f7', accent: '#f4c430',
-    bottom: '#26344a', patch: '#2b3038', boots: true, bootColor: '#20242b', sole: '#e8e2d6',
-    hat: 'beanie', hatColor: '#1c2b45', bgFrom: '#cfe0ff', bgTo: '#7fa3e0',
-    pieces: 'Navy/white zip jacket · Yellow piping · Beanie · Sailing boots',
+  'cold': {
+    file: 'assets/henley-hensen-cold.jpg',
+    alt: 'Avatar in layered navy and white cold-weather sailing gear with gloves and a beanie.',
+    label: 'Cold / windy gear',
   },
-  'Cold': {
-    skin: '#e2a880', hair: '#3b2a1f', top: '#16223a', jacket: '#16223a', panel: '#f0f4f7', accent: '#f4c430',
-    bottom: '#26344a', patch: '#2b3038', bibs: true, bibColor: '#20242b',
-    boots: true, bootColor: '#181c22', sole: '#c7cdd8', hat: 'beanie', hatColor: '#16223a', gloves: true, gloveColor: '#20242b',
-    bgFrom: '#dfe3f5', bgTo: '#9098c9',
-    pieces: 'Insulated navy/white jacket · Charcoal bibs · Beanie · Gloves · Boots',
-  },
-  'Frigid — Foul-Weather Gear': {
-    skin: '#e2a880', hair: '#3b2a1f', top: '#101a2e', jacket: '#101a2e', accent: '#f4c430',
-    bottom: '#20242b', patch: '#181c22', bibs: true, bibColor: '#181c22',
-    boots: true, bootColor: '#0a0e16', sole: '#8a8f99', hat: 'hood', hatColor: '#101a2e', gloves: true, gloveColor: '#181c22', accessory: '❄️',
-    bgFrom: '#e7ecf7', bgTo: '#aab4cc',
-    pieces: 'Full navy foul-weather jacket + hood · Bibs · Gloves · Boots · PFD',
-  },
-  'Unknown': { skin: '#e2a880', hair: '#3b2a1f', top: '#5b6472', bottom: '#374151', boots: false, shoe: '#20242b', sole: '#e8e2d6', bgFrom: '#e5e9ee', bgTo: '#b9c1cc', pieces: '' },
 };
 
-function shadeColor(hex, pct) {
-  const n = parseInt(hex.replace('#', ''), 16);
-  const clamp = (v) => Math.max(0, Math.min(255, v));
-  const r = clamp(((n >> 16) & 255) + Math.round(255 * pct));
-  const g = clamp(((n >> 8) & 255) + Math.round(255 * pct));
-  const b = clamp((n & 255) + Math.round(255 * pct));
-  return '#' + (0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1);
-}
-
-function avatarSVG(cfg) {
-  const {
-    skin = '#e2a880', hair = '#3b2a1f', top, jacket, panel, patch, accent = '#f4c430', bottom, bibs, bibColor,
-    boots, bootColor = '#20242b', shoe = '#20242b', sole = '#e8e2d6',
-    sleeve = 'long', hat, hatColor, sunglasses, gloves, gloveColor = '#20242b',
-    bgFrom = '#e5e9ee', bgTo = '#b9c1cc',
-  } = cfg;
-  const jx = !!jacket;
-  const outerColor = jacket || top;
-  const shortSleeve = sleeve === 'short' && !jx;
-  const g = (fill) => `url(#g-${fill.replace('#', '')})`;
-  const grads = new Set([outerColor, bottom, skin, bibs ? bibColor : null, boots ? bootColor : null, gloves ? gloveColor : null, panel || null].filter(Boolean));
-
-  let s = `<svg viewBox="0 0 200 224" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Illustration of the recommended outfit">`;
-  s += `<defs>`;
-  s += `<radialGradient id="bgGrad" cx="38%" cy="28%" r="75%"><stop offset="0%" stop-color="${bgFrom}"/><stop offset="100%" stop-color="${bgTo}"/></radialGradient>`;
-  grads.forEach((c) => {
-    s += `<linearGradient id="g-${c.replace('#', '')}" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="${shadeColor(c, 0.22)}"/><stop offset="100%" stop-color="${shadeColor(c, -0.12)}"/></linearGradient>`;
-  });
-  s += `</defs>`;
-
-  // soft gradient backdrop, like a studio/portrait shot
-  s += `<circle cx="100" cy="112" r="98" fill="url(#bgGrad)"/>`;
-
-  // chunky pill legs (joggers) — chibi proportions: short & stubby, two-tone cargo patch at the knee
-  const legColor = bibs ? bibColor : bottom;
-  s += `<rect x="68" y="150" width="26" height="50" rx="13" fill="${g(legColor)}"/>`;
-  s += `<rect x="106" y="150" width="26" height="50" rx="13" fill="${g(legColor)}"/>`;
-  if (patch) {
-    s += `<rect x="68" y="172" width="26" height="22" rx="9" fill="${patch}"/>`;
-    s += `<rect x="106" y="172" width="26" height="22" rx="9" fill="${patch}"/>`;
-  }
-
-  // feet: chunky sneakers or boots, with a yellow lace/trim stripe
-  if (boots) {
-    s += `<rect x="62" y="188" width="34" height="26" rx="12" fill="${g(bootColor)}"/><rect x="60" y="205" width="38" height="10" rx="5" fill="${sole}"/>`;
-    s += `<rect x="104" y="188" width="34" height="26" rx="12" fill="${g(bootColor)}"/><rect x="102" y="205" width="38" height="10" rx="5" fill="${sole}"/>`;
-    s += `<rect x="68" y="193" width="4" height="14" rx="2" fill="${accent}"/><rect x="110" y="193" width="4" height="14" rx="2" fill="${accent}"/>`;
-  } else {
-    s += `<rect x="60" y="190" width="36" height="22" rx="11" fill="${shoe}"/><rect x="58" y="203" width="40" height="9" rx="4.5" fill="${sole}"/>`;
-    s += `<rect x="104" y="190" width="36" height="22" rx="11" fill="${shoe}"/><rect x="102" y="203" width="40" height="9" rx="4.5" fill="${sole}"/>`;
-    s += `<rect x="66" y="194" width="4" height="12" rx="2" fill="${accent}"/><rect x="110" y="194" width="4" height="12" rx="2" fill="${accent}"/>`;
-  }
-
-  // arms: rounded stadium capsules, angled slightly outward from the shoulder
-  const armLen = shortSleeve ? 46 : 78;
-  s += `<g transform="rotate(-14 62 96)"><rect x="40" y="96" width="30" height="${armLen}" rx="15" fill="${g(outerColor)}"/></g>`;
-  s += `<g transform="rotate(14 138 96)"><rect x="130" y="96" width="30" height="${armLen}" rx="15" fill="${g(outerColor)}"/></g>`;
-  if (shortSleeve) {
-    s += `<g transform="rotate(-14 62 96)"><rect x="40" y="96" width="30" height="34" rx="15" fill="${g(skin)}"/></g>`;
-    s += `<g transform="rotate(14 138 96)"><rect x="130" y="96" width="30" height="34" rx="15" fill="${g(skin)}"/></g>`;
-  } else if (jx) {
-    // yellow cuff piping at the wrist end of each sleeve
-    s += `<g transform="rotate(-14 62 96)"><rect x="40" y="${96 + armLen - 10}" width="30" height="6" fill="${accent}"/></g>`;
-    s += `<g transform="rotate(14 138 96)"><rect x="130" y="${96 + armLen - 10}" width="30" height="6" fill="${accent}"/></g>`;
-  }
-  // hands (rounded mitts) at the end of each arm's rotated path
-  const armAngle = (14 * Math.PI) / 180;
-  const handOffset = 14 + armLen;
-  const lHandX = 62 - Math.sin(armAngle) * handOffset, lHandY = 96 + Math.cos(armAngle) * handOffset;
-  const rHandX = 138 + Math.sin(armAngle) * handOffset, rHandY = 96 + Math.cos(armAngle) * handOffset;
-  s += `<circle cx="${lHandX.toFixed(1)}" cy="${lHandY.toFixed(1)}" r="14" fill="${gloves ? g(gloveColor) : g(skin)}"/>`;
-  s += `<circle cx="${rHandX.toFixed(1)}" cy="${rHandY.toFixed(1)}" r="14" fill="${gloves ? g(gloveColor) : g(skin)}"/>`;
-  if (gloves) {
-    s += `<circle cx="${lHandX.toFixed(1)}" cy="${lHandY.toFixed(1)}" r="14" fill="none" stroke="${accent}" stroke-width="2.5"/>`;
-    s += `<circle cx="${rHandX.toFixed(1)}" cy="${rHandY.toFixed(1)}" r="14" fill="none" stroke="${accent}" stroke-width="2.5"/>`;
-  }
-
-  // torso: big rounded hoodie/jacket block, chibi-short
-  s += `<rect x="58" y="88" width="84" height="80" rx="34" fill="${g(outerColor)}"/>`;
-  // contrast shoulder/chest panel (white or charcoal color-blocking, like a technical ski/sail jacket)
-  if (panel) {
-    s += `<path d="M58,104 Q100,92 142,104 L142,132 Q100,122 58,132 Z" fill="${g(panel)}"/>`;
-  }
-  // center zip with yellow piping alongside the placket
-  s += `<line x1="100" y1="104" x2="100" y2="156" stroke="rgba(0,0,0,.3)" stroke-width="3" stroke-linecap="round"/>`;
-  s += `<line x1="94" y1="106" x2="94" y2="154" stroke="${accent}" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>`;
-  // collar with yellow trim edge
-  s += `<path d="M80,90 Q100,78 120,90 L114,102 Q100,94 86,102 Z" fill="${shadeColor(outerColor, -0.12)}"/>`;
-  s += `<path d="M80,90 Q100,78 120,90" stroke="${accent}" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
-  // chest zip-pocket accent
-  s += `<rect x="112" y="112" width="18" height="14" rx="4" fill="none" stroke="rgba(0,0,0,.28)" stroke-width="1.5"/><line x1="121" y1="112" x2="121" y2="126" stroke="${accent}" stroke-width="2"/>`;
-  // small chest logo patch (sailing mark, not a real brand logo)
-  s += `<circle cx="72" cy="106" r="8" fill="${accent}" opacity="0.95"/><text x="72" y="110" font-size="10" text-anchor="middle">⛵</text>`;
-  // bib straps + panel
-  if (bibs) {
-    s += `<path d="M82,168 L76,96 L88,96 L90,168 Z" fill="${g(bibColor)}" opacity="0.96"/>`;
-    s += `<path d="M118,168 L124,96 L112,96 L110,168 Z" fill="${g(bibColor)}" opacity="0.96"/>`;
-    s += `<rect x="78" y="172" width="44" height="26" rx="10" fill="${g(bibColor)}"/>`;
-  }
-  // hood, drawn before the head so the face sits inside its opening
-  if (hat === 'hood') {
-    s += `<circle cx="100" cy="66" r="40" fill="${g(hatColor)}"/>`;
-    s += `<circle cx="82" cy="52" r="3.5" fill="rgba(0,0,0,.3)"/><circle cx="118" cy="52" r="3.5" fill="rgba(0,0,0,.3)"/>`;
-  }
-
-  // head: big, round, friendly — chibi proportions
-  s += `<circle cx="100" cy="64" r="38" fill="${g(skin)}"/>`;
-  // simple hairline (skipped under beanie/cap/hood — those fully cover it)
-  if (!hat) {
-    s += `<path d="M64,58 Q62,20 100,18 Q138,20 136,58 Q132,34 100,32 Q68,34 64,58 Z" fill="${hair}"/>`;
-  }
-  // face: simple round eyes + soft smile, Meta-avatar style
-  if (!sunglasses) {
-    s += `<circle cx="87" cy="66" r="4.2" fill="#1b2230"/><circle cx="113" cy="66" r="4.2" fill="#1b2230"/>`;
-    s += `<circle cx="88.5" cy="64.5" r="1.3" fill="#fff"/><circle cx="114.5" cy="64.5" r="1.3" fill="#fff"/>`;
-  }
-  s += `<path d="M88,80 Q100,88 112,80" stroke="#a3673f" stroke-width="3" stroke-linecap="round" fill="none"/>`;
-  // cheeks
-  s += `<circle cx="78" cy="76" r="5" fill="#ff9d80" opacity="0.35"/><circle cx="122" cy="76" r="5" fill="#ff9d80" opacity="0.35"/>`;
-
-  // hats drawn on top of the head
-  if (hat === 'cap') {
-    s += `<path d="M62,50 Q64,18 100,16 Q136,18 138,50 Q120,40 100,40 Q80,40 62,50 Z" fill="${g(hatColor)}"/>`;
-    s += `<path d="M62,48 Q100,38 138,48" stroke="${accent}" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
-    s += `<path d="M60,50 Q40,50 30,58 Q46,54 62,50 Z" fill="${shadeColor(hatColor, -0.1)}"/>`;
-    s += `<circle cx="100" cy="18" r="3" fill="rgba(0,0,0,.25)"/>`;
-  }
-  if (hat === 'beanie') {
-    s += `<path d="M62,52 Q60,14 100,12 Q140,14 138,52 L138,64 Q100,54 62,64 Z" fill="${g(hatColor)}"/>`;
-    s += `<rect x="60" y="52" width="80" height="14" rx="7" fill="${shadeColor(hatColor, -0.14)}"/>`;
-    s += `<circle cx="100" cy="10" r="6" fill="${accent || hatColor}"/>`;
-  }
-  // sunglasses
-  if (sunglasses) {
-    s += `<rect x="76" y="58" width="48" height="14" rx="7" fill="#151b24" opacity="0.95"/>`;
-    s += `<rect x="80" y="60" width="14" height="5" rx="2.5" fill="rgba(255,255,255,.4)"/>`;
-  }
-  // accessory icon
-  if (cfg.accessory) s += `<text x="172" y="34" font-size="26" text-anchor="middle">${cfg.accessory}</text>`;
-
-  s += `</svg>`;
-  return s;
+function pickAvatarState(outfit) {
+  if (outfit.rainy) return 'rain';
+  if (outfit.tier === 'Hot & Sunny' || outfit.tier === 'Warm') return 'sun-cool';
+  return 'cold';
 }
 
 function renderOutfitCard(data) {
   const outfit = computeOutfit(data);
   const body = $('outfitBody');
-  const cfg = OUTFIT_AVATARS[outfit.tier] || OUTFIT_AVATARS['Unknown'];
   const badgeColor = TIER_BADGE_COLORS[outfit.tier] || TIER_BADGE_COLORS['Unknown'];
+  const stateKey = pickAvatarState(outfit);
+  const state = AVATAR_STATES[stateKey];
   body.innerHTML = `
     <div class="outfit-layout">
       <div class="avatar-wrap">
-        ${avatarSVG(cfg)}
-        ${cfg.pieces ? `<div class="avatar-caption">${cfg.pieces}</div>` : ''}
+        <img class="avatar-photo" src="${state.file}" alt="${state.alt}">
+        <div class="avatar-caption">${state.label}</div>
       </div>
       <div class="outfit-details">
         <span class="tier-badge" style="background:${badgeColor.bg}; color:${badgeColor.fg};">${outfit.tier}</span>
